@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"log"
 	"time"
 
@@ -61,4 +62,32 @@ func GenerateRefreshToken(userID string, secretKey []byte) (string, error) {
 	log.Printf("INFO: Access Token erfolgreich generiert für user_id %s", userID)
 
 	return signedToken, nil
+}
+
+func VerifyAccessToken(tokenString string, secretKey []byte) (*AccessTokenClaims, error) {
+
+	token, err := jwt.ParseWithClaims(tokenString, &AccessTokenClaims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			log.Printf("ERROR: Unerwartetes Signaturverfahren: %v", t.Header["alg"])
+			return nil, errors.New("unerwartetes Signaturverfahren")
+		}
+		return secretKey, nil
+	})
+
+	if err != nil {
+		log.Printf("ERROR: Fehler beim Parsen des Tokens: %v", err)
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*AccessTokenClaims); ok && token.Valid {
+		if claims.ExpiresAt.Time.Before(time.Now()) {
+			log.Printf("ERROR: Access Token ist abgelaufen für user_id %s", claims.UserID)
+			return nil, errors.New("access token ist abgelaufen")
+		}
+		log.Printf("INFO: Access Token erfolgreich verifiziert für user_id %s", claims.UserID)
+		return claims, nil
+	} else {
+		log.Printf("ERROR: Ungültige Token-Claims")
+		return nil, errors.New("ungültige token-claims")
+	}
 }
