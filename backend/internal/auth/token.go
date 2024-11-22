@@ -91,3 +91,31 @@ func VerifyAccessToken(tokenString string, secretKey []byte) (*AccessTokenClaims
 		return nil, errors.New("ungültige token-claims")
 	}
 }
+
+func VerifyRefreshToken(tokenString string, secretKey []byte) (*RefreshTokenClaims, error) {
+
+	token, err := jwt.ParseWithClaims(tokenString, &RefreshTokenClaims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			log.Printf("ERROR: Unerwartetes Signaturverfahren: %v", t.Header["alg"])
+			return nil, errors.New("unerwartetes Signaturverfahren")
+		}
+		return secretKey, nil
+	})
+
+	if err != nil {
+		log.Printf("ERROR: Fehler beim Parsen des Tokens: %v", err)
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*RefreshTokenClaims); ok && token.Valid {
+		if claims.ExpiresAt.Time.Before(time.Now()) {
+			log.Printf("ERROR: Refresh Token ist abgelaufen für user_id %s", claims.UserID)
+			return nil, errors.New("refresh token ist abgelaufen")
+		}
+		log.Printf("INFO: Refresh Token erfolgreich verifiziert für user_id %s", claims.UserID)
+		return claims, nil
+	} else {
+		log.Printf("ERROR: Ungültige Token-Claims")
+		return nil, errors.New("ungültige token-claims")
+	}
+}
